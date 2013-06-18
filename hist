@@ -1,0 +1,169 @@
+#!/usr/bin/env node
+
+/*
+ * hist: given a bunch of numbers on stdin (one per line), produce a
+ * DTrace-style histogram.
+ */
+
+var mod_path = require('path');
+var mod_util = require('util');
+
+var printf = function () {
+	process.stdout.write(mod_util.format.apply(
+	    null, Array.prototype.slice.call(arguments)));
+};
+
+var mh_arg0 = mod_path.basename(process.argv[1]);
+var mh_hist;
+
+function main()
+{
+	mh_hist = new HistogramGenerator();
+	readLines(process.stdin, onLine, onEnd);
+	process.stdin.resume();
+}
+
+/*
+ * This would be better implemented as a proper Node stream with flow control,
+ * but the immediate goal is simplicity and avoiding dependencies.  If we start
+ * running this in low-memory, non-interactive contexts, this should be
+ * addressed.
+ */
+function readLines(stream, online, onend)
+{
+	var rlstate = {
+	    'rl_buffered': '',
+	    'rl_isdone': false,
+	    'rl_online': online,
+	    'rl_onend': onend,
+	    'rl_nlines': 1
+	};
+
+	stream.on('data', function (chunk) {
+		rlstate.rl_buffered += chunk.toString('utf8');
+		readLinesProcessBuffered(rlstate);
+	});
+
+	stream.on('end', function () {
+		rlstate.rl_isdone = true;
+		readLinesProcessBuffered(rlstate);
+	});
+}
+
+function readLinesProcessBuffered(rlstate)
+{
+	var lines = rlstate.rl_buffered.split(/\n/);
+	var callback, i, nlines;
+
+	if (!rlstate.rl_isdone) {
+		rlstate.rl_buffered = lines[lines.length - 1];
+		nlines = lines.length - 1;
+	} else {
+		nlines = lines.length;
+
+		if (lines[nlines - 1].length === 0)
+			nlines--;
+	}
+
+	callback = rlstate.rl_online;
+	for (i = 0; i < nlines; i++)
+		callback(lines[i], rlstate.rl_nlines++);
+
+	if (rlstate.rl_isdone)
+		rlstate.rl_onend();
+}
+
+function warn(msg)
+{
+	console.error(mh_arg0 + ': ' + msg);
+}
+
+function onLine(line, i)
+{
+	var value = parseFloat(line, 10);
+
+	if (isNaN(value)) {
+		warn('line ' + i + ': non-numeric value');
+		return;
+	}
+
+	if (value < 0) {
+		warn('line ' + i + ': values must be non-negative');
+		return;
+	}
+
+	mh_hist.add(value);
+}
+
+function onEnd()
+{
+	mh_hist.print(process.stdout);
+}
+
+
+function HistogramGenerator()
+{
+	this.hg_buckets = [];
+	this.hg_max = undefined;
+	this.hg_total = 0;
+}
+
+HistogramGenerator.prototype.add = function (value)
+{
+	var bucket;
+
+	bucket = 0;
+	while (value >= Math.pow(2, bucket))
+		bucket++;
+
+	if (this.hg_buckets[bucket] === undefined)
+		this.hg_buckets[bucket] = 1;
+	else
+		this.hg_buckets[bucket]++;
+
+	if (this.hg_max === undefined || value > this.hg_max)
+		this.hg_max = value;
+
+	this.hg_total++;
+};
+
+HistogramGenerator.prototype.print = function (stream)
+{
+	var b, count, normalized, dots, i;
+
+	printf('           ' +
+	    'value  ------------- Distribution ------------- count\n');
+
+	if (this.hg_buckets.length === 0)
+		return;
+
+	for (b = -1; b < this.hg_buckets.length - 1; b++) {
+		if (this.hg_buckets[b + 1] !== undefined)
+			break;
+	}
+
+	for (; b < this.hg_buckets.length + 1; b++) {
+		count = this.hg_buckets[b] || 0;
+		normalized = Math.round(
+		    40 * this.hg_buckets[b] / this.hg_total);
+		dots = '';
+		for (i = 0; i < normalized; i++)
+			dots += '@';
+		for (; i < 40; i++)
+			dots += ' ';
+
+		printf('%s |%s %s\n',
+		    pad(16, Math.pow(2, b - 1).toString()),
+		    dots, count);
+		prefix = '';
+	}
+};
+
+function pad(width, str)
+{
+	while (str.length < width)
+		str = ' ' + str;
+	return (str);
+}
+
+main();

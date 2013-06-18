@@ -1,0 +1,11 @@
+{
+  "name": "hist",
+  "version": "1.0.0",
+  "description": "generate histograms",
+  "bin": {
+    "hist": "hist"
+  },
+  "author": "Dave Pacheco <dap@joyent.com>",
+  "license": "BSD",
+  "readmeFilename": "README.md"
+}
