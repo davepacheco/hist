@@ -155,7 +155,6 @@ HistogramGenerator.prototype.print = function (stream)
 		printf('%s |%s %s\n',
 		    pad(16, Math.pow(2, b - 1).toString()),
 		    dots, count);
-		prefix = '';
 	}
 };
 
