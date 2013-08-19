@@ -6,6 +6,9 @@
     "hist": "hist"
   },
   "author": "Dave Pacheco <dap@joyent.com>",
-  "license": "BSD",
-  "readmeFilename": "README.md"
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/davepacheco/hist"
+  }
 }
